@@ -1,0 +1,56 @@
+pub fn prettify_xml(xml: &str) -> String {
+    let mut buf = Vec::new();
+
+    let mut reader = Reader::from_str(xml);
+    reader.trim_text(true);
+
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 2);
+
+    loop {
+        let ev = reader.read_event(&mut buf);
+
+        match ev {
+            Ok(Event::Eof) => break, // exits the loop when reaching end of file
+            Ok(event) => writer.write_event(event),
+            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+        }
+        .expect("Failed to parse XML");
+
+        // If we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
+        buf.clear();
+    }
+
+    let result = std::str::from_utf8(&*writer.into_inner())
+        .expect("Failed to convert a slice of bytes to a string slice")
+        .to_string();
+
+    result
+}
+
+
+fn main() {
+    // read in file
+    let file = File::open("docs/gnwqltr.xml").expect("Can't open file");
+    let mut buf_reader = BufReader::new(file);
+    let mut contents = String::new();
+    
+    // need to implement a forloop here to check for cdata and perl- using perl formatter
+
+    buf_reader.read_to_string(&mut contents).expect("Can't read contents to string");
+
+    // xml formatter / prettifier 
+    let el = Element::parse(contents.as_bytes()).expect("parse xml failed");
+    let mut cfg = EmitterConfig::new();
+    cfg.indent_string = Cow::Borrowed("    ");
+    cfg.perform_indent = true;
+    cfg.cdata_to_characters = true;
+    cfg.perform_escaping = false;
+    cfg.write_document_declaration = false;
+    cfg.normalize_empty_elements = false;
+    cfg.autopad_comments = true;
+
+
+    let mut outfile = File::create("docs/out.xml").expect("Couldn't create file!");
+    el.write_with_config(&mut outfile, cfg).expect("Writing xml failed");
+    let _ = outfile.write("\n".as_bytes());
+}
